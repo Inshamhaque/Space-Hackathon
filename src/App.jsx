@@ -1,14 +1,13 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import { Header } from './components/Header'
+import Card from './components/Card'
 
 function App() {
 
   return (
-    <div>
-      <Header />
+    <div className='w-[100vh] h-[100vh] mx-auto flex items-center justify-center'>
+      
+      <Card></Card>
+
     </div>
   )
 }

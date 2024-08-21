@@ -18,7 +18,7 @@ const fileManager = new GoogleAIFileManager(process.env.API_KEY);
 async function uploadAndRetrieveFile() {
   try {
     // Upload the file and specify a display name.
-    const uploadResponse = await fileManager.uploadFile("logo.png", {
+    const uploadResponse = await fileManager.uploadFile("th.jpeg", {
       mimeType: "image/jpeg",
       displayName: "Jetpack drawing",
     });
@@ -63,7 +63,7 @@ async function generateContent() {
           fileUri: uploadResponse.file.uri
         }
       },
-      { text: "Describe how this product might be manufactured." },
+      { text: "What is the name of this object. Give only the name" },
     ]);
 
     // Output the generated text to the console
