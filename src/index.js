@@ -1,61 +1,69 @@
-// To use the File API, add this import path for GoogleAIFileManager.
-// Note that this is a different import path than what you use for generating content.
-// For versions lower than @google/generative-ai@0.13.0
-// use "@google/generative-ai/files"
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
 const { GoogleAIFileManager } = require("@google/generative-ai/server");
-
-// To generate content, use this import path for GoogleGenerativeAI.
-// Note that this is a different import path than what you use for the File API.
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-// Initialize dotenv to load environment variables from .env file
 require('dotenv').config();
+
+const app = express();
+const upload = multer({ storage: multer.memoryStorage() }); // Handle file uploads in memory
+
+// Configure CORS to allow requests only from http://localhost:5173
+app.use(cors({
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+}));
+
+app.use(express.json()); // Add this if you're handling JSON payloads
 
 // Initialize GoogleAIFileManager with your API_KEY.
 const fileManager = new GoogleAIFileManager(process.env.API_KEY);
 
-// Function to upload file and retrieve metadata
-async function uploadAndRetrieveFile() {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    // Upload the file and specify a display name.
-    const uploadResponse = await fileManager.uploadFile("th.jpeg", {
-      mimeType: "image/jpeg",
-      displayName: "Jetpack drawing",
+    const { originalname, mimetype, buffer } = req.file;
+    console.log(originalname, mimetype, buffer);
+
+    // Upload the file and specify a display name
+    const uploadResponse = await fileManager.uploadFile(originalname, {
+      mimeType: mimetype,
+      displayName: "Uploaded image",
+      fileContent: buffer
     });
 
-    // View the response.
-    console.log(`Uploaded file ${uploadResponse.file.displayName} as: ${uploadResponse.file.uri}`);
-
-    // Get the previously uploaded file's metadata.
+    // Retrieve the metadata of the uploaded file
     const getResponse = await fileManager.getFile(uploadResponse.file.name);
 
-    // View the response.
-    console.log(`Retrieved file ${getResponse.displayName} as ${getResponse.uri}`);
-
-    return uploadResponse;
+    // Send the upload and metadata response back to the client
+    res.status(200).json({
+      uploadedFile: uploadResponse.file,
+      retrievedFile: getResponse
+    });
   } catch (error) {
     console.error("Error during file upload or retrieval:", error);
+    res.status(500).json({ error: "File upload or retrieval failed." });
   }
-}
+});
 
-// Function to generate content using uploaded file
-async function generateContent() {
+app.post('/api/generate-content', async (req, res) => {
   try {
-    const uploadResponse = await uploadAndRetrieveFile();
+    const uploadResponse = await fileManager.uploadFile(req.body.filename, {
+      mimeType: "image/jpeg",
+      displayName: "Uploaded image",
+    });
 
     if (!uploadResponse) {
       throw new Error("File upload failed.");
     }
 
-    // Initialize GoogleGenerativeAI with your API_KEY.
+    // Initialize GoogleGenerativeAI with your API_KEY
     const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-
     const model = genAI.getGenerativeModel({
-      // Choose a Gemini model.
       model: "gemini-1.5-pro",
     });
 
-    // Generate content using text and the URI reference for the uploaded file.
+    // Generate content using the uploaded file and a text prompt
     const result = await model.generateContent([
       {
         fileData: {
@@ -63,15 +71,18 @@ async function generateContent() {
           fileUri: uploadResponse.file.uri
         }
       },
-      { text: "What is the name of this object. Give only the name" },
+      { text: "Describe how this product might be manufactured." },
     ]);
 
-    // Output the generated text to the console
-    console.log(result.response.text());
+    // Send the generated content back to the client
+    res.status(200).json({ content: result.response.text() });
   } catch (error) {
     console.error("Error during content generation:", error);
+    res.status(500).json({ error: "Content generation failed." });
   }
-}
+});
 
-// Call the function to start the process
-generateContent();
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
