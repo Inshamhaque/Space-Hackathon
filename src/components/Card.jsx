@@ -227,7 +227,7 @@ const Card = () => {
         />
       </div>
 
-      <button className='mt-4 py-2 px-6 bg-lime-700 hover:bg-lime-800 text-white rounded-xl cursor-pointer font-semibold transition-colors duration-200'>
+      <button className='mt-4 py-2 px-6 bg-blue-500 hover:bg-blue-600 text-white rounded-xl cursor-pointer font-semibold transition-colors duration-200'>
         Upload
       </button>
 
