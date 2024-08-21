@@ -1,88 +1,87 @@
 const express = require('express');
+const fs = require('fs-extra');
+const path = require('path');
 const multer = require('multer');
-const cors = require('cors');
-const { GoogleAIFileManager } = require("@google/generative-ai/server");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-require('dotenv').config();
+const cors = require('cors'); // Import the cors package
+const { VertexAI } = require('@google-cloud/aiplatform'); // Correctly import VertexAI or equivalent client
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() }); // Handle file uploads in memory
+const port = 3001;
 
-// Configure CORS to allow requests only from http://localhost:5173
-app.use(cors({
-  origin: 'http://localhost:5173',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
-}));
+// Middleware for parsing JSON bodies
+app.use(express.json());
 
-app.use(express.json()); // Add this if you're handling JSON payloads
+// Middleware for handling CORS
+app.use(cors()); // Enable CORS for all origins
 
-// Initialize GoogleAIFileManager with your API_KEY.
-const fileManager = new GoogleAIFileManager(process.env.API_KEY);
+// Set up multer for file upload
+const upload = multer({ dest: 'uploads/' });
 
+// Google Generative AI client setup (replace with your configuration)
+const client = new VertexAI({ // Correct instantiation
+  projectId: 'your-project-id',
+  keyFilename: 'path/to/your-service-account-key.json',
+});
+
+// Route to handle file upload
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    const { originalname, mimetype, buffer } = req.file;
-    console.log(originalname, mimetype, buffer);
-
-    // Upload the file and specify a display name
-    const uploadResponse = await fileManager.uploadFile(originalname, {
-      mimeType: mimetype,
-      displayName: "Uploaded image",
-      fileContent: buffer
-    });
-
-    // Retrieve the metadata of the uploaded file
-    const getResponse = await fileManager.getFile(uploadResponse.file.name);
-
-    // Send the upload and metadata response back to the client
-    res.status(200).json({
-      uploadedFile: uploadResponse.file,
-      retrievedFile: getResponse
-    });
-  } catch (error) {
-    console.error("Error during file upload or retrieval:", error);
-    res.status(500).json({ error: "File upload or retrieval failed." });
-  }
-});
-
-app.post('/api/generate-content', async (req, res) => {
-  try {
-    const uploadResponse = await fileManager.uploadFile(req.body.filename, {
-      mimeType: "image/jpeg",
-      displayName: "Uploaded image",
-    });
-
-    if (!uploadResponse) {
-      throw new Error("File upload failed.");
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded.' });
     }
 
-    // Initialize GoogleGenerativeAI with your API_KEY
-    const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
-    });
-
-    // Generate content using the uploaded file and a text prompt
-    const result = await model.generateContent([
-      {
-        fileData: {
-          mimeType: uploadResponse.file.mimeType,
-          fileUri: uploadResponse.file.uri
-        }
-      },
-      { text: "Describe how this product might be manufactured." },
-    ]);
-
-    // Send the generated content back to the client
-    res.status(200).json({ content: result.response.text() });
+    // Respond with the file information
+    const uploadedFile = {
+      originalName: file.originalname,
+      path: file.path,
+    };
+    res.json({ uploadedFile });
   } catch (error) {
-    console.error("Error during content generation:", error);
-    res.status(500).json({ error: "Content generation failed." });
+    console.error('Error uploading file:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+  console.log("uploaded");
+});
+
+// Route to handle content generation
+app.post('/api/generate-content', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    if (!filename) {
+      return res.status(400).json({ error: 'Filename is required.' });
+    }
+
+    // Read the file and convert it to base64
+    const filePath = path.join(__dirname, 'uploads', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found.' });
+    }
+
+    const fileBuffer = await fs.readFile(filePath);
+    const fileBase64 = fileBuffer.toString('base64');
+    const fileType = path.extname(filename).slice(1); // Get file extension (e.g., "jpeg", "png")
+
+    // Example of using the client - replace with actual method
+    const request = {
+      parent: `projects/your-project-id/locations/your-location`,
+      document: {
+        content: fileBase64,
+        mimeType: `image/${fileType}`,
+      },
+    };
+
+    const [response] = await client.documents.predict(request); // Replace with actual method
+
+    // Respond with the generated content
+    res.json({ content: response.predictions });
+  } catch (error) {
+    console.error('Error during content generation:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Start the server
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
 });

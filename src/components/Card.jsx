@@ -3,24 +3,31 @@ import axios from 'axios';
 import logo from "../assets/frontimage.png";
 
 const Card = () => {
-  const [userImage, setUserImage] = useState("");
+  const [userImageFile, setUserImageFile] = useState(null);
+  const [userImagePreview, setUserImagePreview] = useState("");
   const [uploadResponse, setUploadResponse] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(''); // Corrected state variable name
 
   const storeImage = (event) => {
     const file = event.target.files[0];
     if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setUserImage(imageUrl);
-      uploadFile(file);
+      setUserImageFile(file); // Store the file itself for upload
+      const imageUrl = URL.createObjectURL(file); // For preview only
+      setUserImagePreview(imageUrl);
     }
   };
 
-  const uploadFile = async (file) => {
+  const uploadFile = async () => {
+    if (!userImageFile) {
+      console.error("No file selected.");
+      return;
+    }
+
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', userImageFile);
 
       const response = await axios.post('http://localhost:3001/api/upload', formData, {
         headers: {
@@ -29,6 +36,8 @@ const Card = () => {
       });
 
       setUploadResponse(response.data);
+      setName(response.data.uploadedFile.originalName); // Update state with the file name
+      console.log(response.data.uploadedFile.originalName);
       setLoading(false);
     } catch (error) {
       console.error("Error uploading file:", error);
@@ -37,15 +46,15 @@ const Card = () => {
   };
 
   const generateContent = async () => {
-    if (!uploadResponse) {
-      console.error("No file uploaded.");
+    if (!name) { // Check if name is not empty
+      console.error("No file name available.");
       return;
     }
 
     setLoading(true);
     try {
       const response = await axios.post('http://localhost:3001/api/generate-content', {
-        filename: uploadResponse.uploadedFile.displayName
+        filename: name, // Send the filename correctly
       });
 
       console.log("Generated content:", response.data.content);
@@ -62,7 +71,7 @@ const Card = () => {
         Please Upload an Image for Reference
       </h1>
 
-      {!userImage ? (
+      {!userImagePreview ? (
         <div className='flex justify-center'>
           <img 
             src={logo} 
@@ -73,7 +82,7 @@ const Card = () => {
       ) : (
         <div className='flex justify-center'>
           <img 
-            src={userImage} 
+            src={userImagePreview} 
             className='lg:w-[350px] lg:h-[200px] md:w-[300px] md:h-[180px] sm:w-[250px] sm:h-[150px] w-[200px] h-[120px] rounded-lg shadow-md' 
             alt="Uploaded" 
           />
@@ -97,10 +106,18 @@ const Card = () => {
 
       <button 
         className='mt-4 py-2 px-6 bg-lime-700 hover:bg-lime-800 text-white rounded-xl cursor-pointer font-semibold transition-colors duration-200'
-        onClick={generateContent}
+        onClick={uploadFile} // Trigger the file upload
         disabled={loading}
       >
-        {loading ? "Processing..." : "Upload"}
+        {loading ? "Uploading..." : "Upload"}
+      </button>
+
+      <button 
+        className='mt-4 py-2 px-6 bg-lime-700 hover:bg-lime-800 text-white rounded-xl cursor-pointer font-semibold transition-colors duration-200'
+        onClick={generateContent}
+        disabled={loading || !uploadResponse}
+      >
+        {loading ? "Generating Content..." : "Generate Content"}
       </button>
     </div>
   );
